@@ -30,10 +30,8 @@ st.set_page_config(
 # =============================================================================
 # 세션 상태 초기화
 # =============================================================================
-if 'analysis_done' not in st.session_state:
-    st.session_state.analysis_done = False
-if 'clear_input' not in st.session_state:
-    st.session_state.clear_input = False
+if 'input_key' not in st.session_state:
+    st.session_state.input_key = 0
 
 # =============================================================================
 # CSS
@@ -525,22 +523,14 @@ def main():
     </div>
     ''', unsafe_allow_html=True)
     
-    # 입력 (클릭 시 리프레시)
+    # 입력
     col1, col2, col3 = st.columns([1, 2.5, 1])
     with col2:
-        # 입력창 클릭 시 초기화를 위해 key 사용
-        if st.session_state.clear_input:
-            default_value = ""
-            st.session_state.clear_input = False
-        else:
-            default_value = ""
-        
         url = st.text_input(
             "URL", 
-            value=default_value,
-            placeholder="https://www.youtube.com/watch?v=... (클릭하면 초기화됩니다)", 
+            placeholder="https://www.youtube.com/watch?v=...", 
             label_visibility="collapsed",
-            key="url_input"
+            key=f"url_input_{st.session_state.input_key}"
         )
         
         col_btn1, col_btn2 = st.columns([2, 1])
@@ -548,8 +538,7 @@ def main():
             btn = st.button("🔍 분석 시작", use_container_width=True)
         with col_btn2:
             if st.button("🔄 초기화", use_container_width=True):
-                st.session_state.clear_input = True
-                st.session_state.analysis_done = False
+                st.session_state.input_key += 1
                 st.rerun()
     
     if btn and url:
