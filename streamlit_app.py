@@ -14,7 +14,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 import re
 import io
 from typing import List, Tuple, Dict, Optional
@@ -378,37 +377,37 @@ def format_num(n):
     except: return "0"
 
 # =============================================================================
-# [NEW] 언어 감지 함수
+# [NEW] 언어 감지 함수 (외부 라이브러리 없이 휴리스틱 사용)
 # =============================================================================
 def detect_language(text: str) -> str:
-    """댓글 텍스트의 언어를 감지"""
+    """댓글 텍스트의 언어를 감지 (휴리스틱 기반)"""
     if not text or len(text.strip()) < 3:
         return 'unknown'
     
     try:
-        from langdetect import detect, LangDetectException
-        try:
-            lang = detect(text)
-            # 주요 언어 매핑
-            lang_map = {
-                'ko': '한국어', 'en': '영어', 'ja': '일본어', 'zh-cn': '중국어', 'zh-tw': '중국어',
-                'es': '스페인어', 'pt': '포르투갈어', 'fr': '프랑스어', 'de': '독일어',
-                'ru': '러시아어', 'ar': '아랍어', 'hi': '힌디어', 'th': '태국어', 'vi': '베트남어',
-                'id': '인도네시아어', 'ms': '말레이어', 'tl': '필리핀어'
-            }
-            return lang_map.get(lang, lang)
-        except LangDetectException:
-            return 'unknown'
-    except ImportError:
-        # langdetect 없으면 간단한 휴리스틱
+        # 문자 패턴 기반 언어 감지
         korean = len(re.findall(r'[가-힣]', text))
         english = len(re.findall(r'[a-zA-Z]', text))
         japanese = len(re.findall(r'[\u3040-\u309F\u30A0-\u30FF]', text))
         chinese = len(re.findall(r'[\u4e00-\u9fff]', text))
+        thai = len(re.findall(r'[\u0E00-\u0E7F]', text))
+        arabic = len(re.findall(r'[\u0600-\u06FF]', text))
+        russian = len(re.findall(r'[\u0400-\u04FF]', text))
         
-        scores = {'한국어': korean, '영어': english, '일본어': japanese, '중국어': chinese}
+        scores = {
+            '한국어': korean * 2,  # 한글은 가중치
+            '영어': english,
+            '일본어': japanese * 2,
+            '중국어': chinese * 2,
+            '태국어': thai * 2,
+            '아랍어': arabic * 2,
+            '러시아어': russian * 2
+        }
+        
         max_lang = max(scores, key=scores.get)
-        return max_lang if scores[max_lang] > 0 else 'unknown'
+        return max_lang if scores[max_lang] > 2 else 'unknown'
+    except Exception:
+        return 'unknown'
 
 def analyze_by_language(df: pd.DataFrame) -> Dict:
     """언어별 분석 수행"""
