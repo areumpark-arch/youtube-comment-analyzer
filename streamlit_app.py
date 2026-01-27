@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-유튜브 댓글 인사이트 분석기 v8.0
+유튜브 댓글 인사이트 분석기 v8.1
 ================================
-고급 분석 기능 추가:
-- 언어별 분석
-- 댓글 의견 유형 분류
-- 마케팅 전략 인사이트
-- 영상 정보 보완 체크
-- PDF 리포트 고도화
+v8.1 업데이트:
+- 댓글 1000개 초과 시 분석/전체 댓글 수 표시
+- 감성 분류 정확도 개선
+- 의견 유형 카테고리 재정의
+- UI 개선 (분석 기준 명시, 섹션 순서 변경)
 """
 
 import streamlit as st
@@ -226,60 +225,76 @@ STOPWORDS = set(['은', '는', '이', '가', '을', '를', '에', '에서', '의
     'video', 'comment', 'youtube', 'channel', 'subscribe', 'like', 'just', 'really', 'very', 'much', 'what', 'how'])
 
 POSITIVE_WORDS = {'좋다', '좋아', '좋네', '좋은', '좋았', '좋음', '좋아요', '좋습니다', '최고', '최고다', '최고야', '최고예요', '최고임',
-    '대박', '대박이다', '멋지다', '멋져', '멋있다', '멋있어', '멋짐', '예쁘다', '예뻐', '예쁨', '이쁘다', '이뻐',
+    '대박', '대박이다', '멋지다', '멋져', '멋있다', '멋있어', '멋짐', '멋진', '예쁘다', '예뻐', '예쁨', '이쁘다', '이뻐', '예쁜',
     '사랑', '사랑해', '사랑해요', '사랑합니다', '감사', '감사해요', '감사합니다', '고마워', '고맙습니다',
     '행복', '행복해', '기쁘다', '즐겁다', '기대', '기대된다', '기대돼', '응원', '응원해', '화이팅', '파이팅', '힘내',
-    '훌륭', '완벽', '감동', '설렘', '설레', '재밌', '재밌다', '재미있', '웃기다', '웃겨', '힐링', '귀엽', '귀여워',
+    '훌륭', '완벽', '감동', '설렘', '설레', '재밌', '재밌다', '재미있', '웃기다', '웃겨', '힐링', '귀엽', '귀여워', '귀여운', '귀염',
     '잘생', '잘생겼', '존잘', '존예', '짱', '쩔어', '쩐다', '미쳤', '미쳤다', '대단', '놀랍', '신기', '레전드',
     '인정', '추천', '갓', '존경', '천재', '아름답', '환상적', '역시', '믿고보는', '찐', '꿀잼', '핵잼', '존잼', '소름', '감탄', '공감',
+    # v8.1 추가: 광고/모델 관련 긍정 표현
+    '소화', '다양', '매력', '분위기', '아우라', '카리스마', '비주얼', '피지컬', '청순', '섹시', '쎈언니', '걸크러시',
+    '찰떡', '어울리', '어울린다', '잘어울', '싱크로', '케미', '텐션', '센스', '유머', '작정', '본업', '장인', '프로',
+    '퀄리티', '완성도', '고급', '세련', '감각', '감성', '힙', '트렌디', '신선', '참신', '기발', '독특', '개성',
+    '중독', '계속', '반복', '또', '다시', '몇번째', '루프', '돌려봄', '킬링', '포인트', '임팩트',
     'good', 'great', 'best', 'love', 'amazing', 'awesome', 'beautiful', 'excellent', 'fantastic', 'perfect', 'happy',
-    'incredible', 'brilliant', 'wow', 'omg', 'fire', 'goat', 'queen', 'king', 'icon', 'slay', 'legend'}
+    'incredible', 'brilliant', 'wow', 'omg', 'fire', 'goat', 'queen', 'king', 'icon', 'slay', 'legend', 'cute', 'pretty'}
 
-NEGATIVE_WORDS = {'싫다', '싫어', '별로', '최악', '실망', '짜증', '짜증나', '화나', '답답', '불쾌', '슬프', '우울',
-    '아쉽', '걱정', '불안', '힘들', '피곤', '나쁘', '못하', '후회', '혐오', '역겹', '지루', '노잼', '재미없', '망했', '망함', '쓰레기', '불편', '비추',
-    'bad', 'worst', 'hate', 'terrible', 'awful', 'sad', 'angry', 'disappointed', 'boring', 'fail', 'trash', 'cringe'}
+NEGATIVE_WORDS = {'싫다', '싫어', '싫음', '별로', '별루', '최악', '실망', '실망했', '짜증', '짜증나', '짜증남',
+    '화나', '화남', '답답', '불쾌', '슬프', '슬퍼', '우울', '우울해',
+    '아쉽', '아쉬워', '걱정', '불안', '힘들', '피곤', '나쁘', '나빠', '못하', '못함', '후회', '혐오', '역겹', 
+    '지루', '노잼', '재미없', '망했', '망함', '쓰레기', '불편', '비추', '극혐', '폭망', '실패',
+    # 명확한 부정 표현만 유지 (모호한 표현 제거)
+    'bad', 'worst', 'hate', 'terrible', 'awful', 'sad', 'angry', 'disappointed', 'boring', 'fail', 'trash', 'cringe', 'sucks'}
 
 POSITIVE_EMOJIS = set('😀😃😄😁😆😅🤣😂😊😇🥰😍🤩😘👍👏🙌💪✨🌟⭐💖💗❤🧡💛💚💙💜💝🔥💯🎉👑💎🏆😎🤗🥳❤️')
 NEGATIVE_EMOJIS = set('😢😭😤😠😡🤬💔👎🙄😒😞😔😟🙁😣😖😫😩😱🤮🤢')
 
 # =============================================================================
-# [NEW] 의견 유형 분류 키워드 사전
+# [NEW] 의견 유형 분류 키워드 사전 (v8.1 수정)
 # =============================================================================
 OPINION_TAXONOMY = {
-    'ai_model': {
-        'name': 'AI/모델 자체',
-        'keywords': ['ai', 'gpt', '모델', 'llm', '인공지능', '알고리즘', '학습', '파라미터', 'chatgpt', 'claude', 
-                    'gemini', '딥러닝', '머신러닝', 'ml', 'neural', '신경망', 'transformer', '언어모델', 'api',
-                    '성능', '정확도', '할루시네이션', '환각', '답변', '생성', 'prompt', '프롬프트'],
-        'color': '#3b82f6'
-    },
     'product_service': {
         'name': '제품/서비스',
         'keywords': ['제품', '서비스', '앱', '어플', '프로그램', '소프트웨어', '기능', '업데이트', '버전', '출시',
-                    '가격', '요금', '구독', '무료', '유료', '플랜', 'pro', 'premium', '결제', '환불',
-                    'product', 'service', 'app', 'feature', 'update', 'price', 'subscription', '사용', '이용'],
+                    '가격', '요금', '구독', '무료', '유료', '플랜', 'pro', 'premium', '결제', '환불', '품질',
+                    'product', 'service', 'app', 'feature', 'update', 'price', 'subscription', '사용', '이용',
+                    '증권', '은행', '카드', '보험', '통신', '배달', '쇼핑', '플랫폼'],
         'color': '#10b981'
     },
-    'brand_company': {
-        'name': '브랜드/기업',
-        'keywords': ['회사', '기업', '브랜드', '구글', 'google', '오픈ai', 'openai', '마이크로소프트', 'microsoft',
-                    '애플', 'apple', '메타', 'meta', '네이버', '카카오', '삼성', 'samsung', '테슬라', 'tesla',
-                    'anthropic', '앤트로픽', 'ceo', '대표', '창업자', '일론', '샘알트만', '직원', '해고', '인수'],
+    'brand': {
+        'name': '브랜드',
+        'keywords': ['회사', '기업', '브랜드', '구글', 'google', '애플', 'apple', '삼성', 'samsung', '네이버', '카카오',
+                    '현대', 'lg', 'sk', '롯데', '신세계', 'cj', '한화', '대기업', '스타트업', '광고주', '협찬사',
+                    'nike', '나이키', 'adidas', '아디다스', '루이비통', '샤넬', '구찌', 'brand', 'company'],
         'color': '#f59e0b'
     },
     'market_social': {
         'name': '시장/사회적 영향',
         'keywords': ['일자리', '직업', '대체', '실업', '미래', '위험', '윤리', '규제', '법', '정책', '저작권',
-                    '프라이버시', '개인정보', '보안', '해킹', '가짜뉴스', '딥페이크', '편향', '차별',
-                    'job', 'future', 'risk', 'regulation', 'ethics', 'privacy', 'security', '사회', '영향', '변화'],
+                    '프라이버시', '개인정보', '보안', '사회', '영향', '변화', '트렌드', '세대', '문화', '논란',
+                    'job', 'future', 'risk', 'regulation', 'ethics', 'trend', '경제', '시장', '업계'],
         'color': '#ef4444'
     },
-    'content_video': {
-        'name': '영상 콘텐츠',
-        'keywords': ['영상', '콘텐츠', '편집', '설명', '자막', '목소리', '진행', '전달', '이해', '쉽게', '어렵',
-                    '길이', '짧', '긴', '요약', '정리', '예시', '비교', '분석', '리뷰', '튜토리얼', '강의',
-                    'video', 'content', 'explain', 'tutorial', 'review', '유익', '도움', '감사', '구독', '알림'],
+    'model_person': {
+        'name': '모델/출연자',
+        'keywords': ['모델', '배우', '연예인', '아이돌', '가수', '출연', '캐스팅', '얼굴', '외모', '스타일', '패션',
+                    '연기', '표정', '목소리', '매력', '분위기', '이미지', '비주얼', '피지컬', '아우라', '카리스마',
+                    '팬', '덕질', '최애', '셀럽', 'celebrity', 'idol', 'actor', 'actress', '광고모델'],
+        'color': '#ec4899'
+    },
+    'visual_aesthetic': {
+        'name': '영상미/심미성',
+        'keywords': ['영상미', '화질', '색감', '조명', '촬영', '구도', '편집', '연출', '감독', 'cg', '그래픽', '효과',
+                    '아름답', '예쁘', '멋있', '화려', '고급', '세련', '감각', '퀄리티', '완성도', '디자인', '미적',
+                    'beautiful', 'aesthetic', 'visual', 'quality', 'cinematic', '배경', '장면', '앵글', '무드'],
         'color': '#8b5cf6'
+    },
+    'fun_entertainment': {
+        'name': '재미요소',
+        'keywords': ['재밌', '재미', '웃기', '웃긴', '웃음', '유머', '센스', '킬링포인트', '중독', '계속', '반복',
+                    '꿀잼', '핵잼', '존잼', '노잼', 'funny', 'fun', 'hilarious', 'lol', 'lmao', '개그', '코미디',
+                    '병맛', '찰떡', '포인트', '임팩트', '신선', '참신', '기발', '아이디어', '컨셉', '스토리'],
+        'color': '#06b6d4'
     }
 }
 
@@ -480,7 +495,7 @@ def classify_opinion_type(text: str) -> List[str]:
                 categories.append(cat_id)
                 break
     
-    return categories if categories else ['content_video']  # 기본값: 영상 콘텐츠
+    return categories if categories else ['fun_entertainment']  # 기본값: 재미요소
 
 def analyze_opinion_taxonomy(df: pd.DataFrame) -> Dict:
     """의견 유형별 분석"""
@@ -769,18 +784,27 @@ def generate_video_info_suggestions(video_info: Dict, total_comments: int, pos_p
 # =============================================================================
 @st.cache_data(ttl=1800, show_spinner=False)
 def collect_comments(url, max_comments):
+    """
+    댓글 수집 기준: YouTube API의 'top' (인기순) 정렬
+    - 좋아요 수가 많은 댓글이 우선 수집됨
+    - 최대 max_comments개까지만 수집
+    """
     import yt_dlp
     opts = {'quiet': True, 'no_warnings': True, 'extract_flat': False, 'getcomments': True,
             'extractor_args': {'youtube': {'max_comments': [str(max_comments)], 'comment_sort': ['top']}}}
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
         if not info: return None, []
+        
+        total_comment_count = info.get('comment_count', 0) or 0
+        
         video_info = {
             'title': info.get('title', '제목 없음'),
             'channel': info.get('channel', info.get('uploader', '')),
             'thumbnail': info.get('thumbnail', ''),
             'view_count': info.get('view_count', 0),
             'like_count': info.get('like_count', 0),
+            'comment_count': total_comment_count,  # 전체 댓글 수
             'upload_date': format_date(info.get('upload_date', '')),
             'upload_date_raw': info.get('upload_date', ''),
             'url': url,
@@ -790,28 +814,61 @@ def collect_comments(url, max_comments):
         return video_info, comments
 
 # =============================================================================
-# 감성 분석
+# 감성 분석 (v8.1 개선: 긍부정 분류 정확도 향상)
 # =============================================================================
 def analyze_sentiment(text):
+    """
+    감성 분석 기준:
+    - 긍정/부정 이모지 비율
+    - 긍정/부정 키워드 매칭
+    - 웃음 표현 (ㅋㅋ, ㅎㅎ) → 긍정 가중치
+    - 감탄/강조 표현 (!, 하, 와, 오) → 맥락에 따라 판단
+    """
     if not text: return 'neutral', 0.0
     text_lower = text.lower()
     score = 0.0
     
+    # 1. 이모지 분석
     pos_e = sum(1 for e in POSITIVE_EMOJIS if e in text)
     neg_e = sum(1 for e in NEGATIVE_EMOJIS if e in text)
-    if pos_e + neg_e > 0: score += (pos_e - neg_e) / (pos_e + neg_e + 1) * 1.5
+    if pos_e + neg_e > 0: 
+        score += (pos_e - neg_e) / (pos_e + neg_e + 1) * 1.5
     
+    # 2. 키워드 분석
     words = set(re.findall(r'[가-힣]+|[a-z]+', text_lower))
     pos_w = sum(1 for w in words if any(pw in w or w in pw for pw in POSITIVE_WORDS))
     neg_w = sum(1 for w in words if any(nw in w or w in nw for nw in NEGATIVE_WORDS))
-    if pos_w + neg_w > 0: score += (pos_w - neg_w) / (pos_w + neg_w + 0.5)
+    if pos_w + neg_w > 0: 
+        score += (pos_w - neg_w) / (pos_w + neg_w + 0.5)
     
-    if re.search(r'ㅋ{2,}|ㅎ{2,}', text): score += 0.3
-    if re.search(r'ㅡㅡ|;;', text): score -= 0.3
-    if text.count('!') >= 2: score += 0.2
+    # 3. 웃음 표현 (ㅋㅋ, ㅎㅎ) → 강한 긍정 신호
+    laugh_pattern = re.findall(r'ㅋ{2,}|ㅎ{2,}|ㄱㅋ+', text)
+    if laugh_pattern:
+        laugh_count = len(laugh_pattern)
+        score += 0.4 * min(laugh_count, 3)  # 최대 1.2까지 가중치
     
-    if score > 0.1: return 'positive', min(score, 1.0)
-    elif score < -0.1: return 'negative', max(score, -1.0)
+    # 4. 감탄 표현 분석 (맥락 고려)
+    # "하 진짜" 같은 표현은 웃음 표현과 함께 있으면 긍정
+    exclaim_pattern = re.search(r'^(하|와|오|우와|헐|대박)\s', text)
+    if exclaim_pattern:
+        if laugh_pattern or pos_w > 0:  # 웃음이나 긍정 키워드와 함께면 긍정
+            score += 0.3
+        # 부정 키워드 없이 단독이면 중립 유지 (score 변경 없음)
+    
+    # 5. 느낌표 (긍정 맥락에서만 가중치)
+    exclamation_count = text.count('!')
+    if exclamation_count >= 2 and neg_w == 0:
+        score += 0.2
+    
+    # 6. 부정 패턴 (명확한 경우만)
+    if re.search(r'ㅡㅡ+|;;+|\.\.\.+$', text) and pos_w == 0:
+        score -= 0.3
+    
+    # 7. 최종 판정 (임계값 조정)
+    if score > 0.15:  # 긍정 임계값 약간 상향
+        return 'positive', min(score, 1.0)
+    elif score < -0.2:  # 부정 임계값 상향 (더 명확해야 부정)
+        return 'negative', max(score, -1.0)
     return 'neutral', score
 
 # =============================================================================
@@ -958,7 +1015,7 @@ def generate_pdf_report(
     story = []
     
     # 제목
-    story.append(Paragraph("유튜브 댓글 인사이트 리포트 v8.0", styles['KTitle']))
+    story.append(Paragraph("유튜브 댓글 인사이트 리포트 v8.1", styles['KTitle']))
     story.append(Paragraph(f"생성: {datetime.now().strftime('%Y-%m-%d %H:%M')}", styles['KSmall']))
     story.append(Spacer(1, 8))
     
@@ -1051,7 +1108,7 @@ def generate_pdf_report(
     # 푸터
     story.append(Spacer(1, 15))
     story.append(Paragraph("─" * 60, styles['KSmall']))
-    story.append(Paragraph("유튜브 댓글 인사이트 분석기 v8.0 | 자동 생성 리포트", styles['KSmall']))
+    story.append(Paragraph("유튜브 댓글 인사이트 분석기 v8.1 | 자동 생성 리포트", styles['KSmall']))
     
     doc.build(story)
     buffer.seek(0)
@@ -1171,12 +1228,21 @@ def main():
             st.markdown('</div>', unsafe_allow_html=True)
             
             # 핵심 지표
+            total_comments = video_info.get('comment_count', 0)
+            
             c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric("분석 댓글", f"{total:,}개")
+            if total_comments > CONFIG["max_comments"]:
+                c1.metric("분석 댓글", f"{total:,}개", delta=f"전체 {format_num(total_comments)}개 중")
+            else:
+                c1.metric("분석 댓글", f"{total:,}개")
             c2.metric("긍정률", f"{pos_pct:.1f}%")
             c3.metric("부정률", f"{neg_pct:.1f}%")
             c4.metric("언어 수", f"{len(lang_analysis)}개")
             c5.metric("의견 유형", f"{len(taxonomy_analysis)}개")
+            
+            # 1000개 초과 시 안내 문구
+            if total_comments > CONFIG["max_comments"]:
+                st.info(f"ℹ️ 전체 댓글 {format_num(total_comments)}개 중 **좋아요(인기) 순으로 상위 {CONFIG['max_comments']:,}개**만 분석했습니다. 인기 댓글 위주의 분석 결과입니다.")
             
             # PDF 다운로드
             try:
@@ -1201,13 +1267,42 @@ def main():
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.markdown("**감성 분포**")
                 st.plotly_chart(create_donut_chart(pos, neu, neg), use_container_width=True, config={'displayModeBar': False})
+                st.caption("📌 분석 기준: 긍정/부정 키워드, 이모지, 웃음 표현(ㅋㅋ, ㅎㅎ) 등을 종합 분석")
                 st.markdown('</div>', unsafe_allow_html=True)
             with c2:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.markdown("**핵심 키워드**")
                 if keywords:
                     st.plotly_chart(create_keyword_chart(keywords), use_container_width=True, config={'displayModeBar': False})
+                st.caption("📌 숫자 = 해당 키워드가 댓글에서 언급된 횟수")
                 st.markdown('</div>', unsafe_allow_html=True)
+            
+            # =====================================================================
+            # 💬 주요 댓글 (감성 분석 바로 다음으로 이동)
+            # =====================================================================
+            st.markdown('<div class="section-title">💬 주요 댓글</div>', unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            
+            with c1:
+                st.markdown("**👍 긍정 TOP 3**")
+                for c in top_pos_comments:
+                    txt = str(c['text'])[:100] + ('...' if len(str(c['text'])) > 100 else '')
+                    st.markdown(f'''<div class="comment pos">
+                        <div class="comment-text">"{txt}"</div>
+                        <div class="comment-likes">👍 {int(c['like_count']):,}</div>
+                    </div>''', unsafe_allow_html=True)
+            
+            with c2:
+                st.markdown("**👎 부정 TOP 3**")
+                if top_neg_comments:
+                    for c in top_neg_comments:
+                        txt = str(c['text'])[:100] + ('...' if len(str(c['text'])) > 100 else '')
+                        st.markdown(f'''<div class="comment neg">
+                            <div class="comment-text">"{txt}"</div>
+                            <div class="comment-likes">👍 {int(c['like_count']):,}</div>
+                        </div>''', unsafe_allow_html=True)
+                else:
+                    st.success("🎉 부정 댓글이 거의 없습니다!")
             
             # =====================================================================
             # 🌍 언어별 분석
@@ -1325,34 +1420,7 @@ def main():
                     <span style="font-size:0.9rem">{sug['desc']}</span>
                 </div>''', unsafe_allow_html=True)
             
-            # =====================================================================
-            # 💬 주요 댓글
-            # =====================================================================
-            st.markdown('<div class="section-title">💬 주요 댓글</div>', unsafe_allow_html=True)
-            c1, c2 = st.columns(2)
-            
-            with c1:
-                st.markdown("**👍 긍정 TOP 3**")
-                for c in top_pos_comments:
-                    txt = str(c['text'])[:100] + ('...' if len(str(c['text'])) > 100 else '')
-                    st.markdown(f'''<div class="comment pos">
-                        <div class="comment-text">"{txt}"</div>
-                        <div class="comment-likes">👍 {int(c['like_count']):,}</div>
-                    </div>''', unsafe_allow_html=True)
-            
-            with c2:
-                st.markdown("**👎 부정 TOP 3**")
-                if top_neg_comments:
-                    for c in top_neg_comments:
-                        txt = str(c['text'])[:100] + ('...' if len(str(c['text'])) > 100 else '')
-                        st.markdown(f'''<div class="comment neg">
-                            <div class="comment-text">"{txt}"</div>
-                            <div class="comment-likes">👍 {int(c['like_count']):,}</div>
-                        </div>''', unsafe_allow_html=True)
-                else:
-                    st.success("🎉 부정 댓글이 거의 없습니다!")
-            
-            st.markdown('<div class="footer">유튜브 댓글 인사이트 분석기 v8.0</div>', unsafe_allow_html=True)
+            st.markdown('<div class="footer">유튜브 댓글 인사이트 분석기 v8.1</div>', unsafe_allow_html=True)
             
         except Exception as e:
             st.error(f"❌ 오류: {str(e)}")
