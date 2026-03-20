@@ -11,7 +11,11 @@
 import streamlit as st
 import pandas as pd
 import re
+import matplotlib.pyplot as plt
 from collections import Counter
+from wordcloud import WordCloud
+import urllib.request
+import os
 
 # =============================================================================
 # 설정
@@ -513,6 +517,67 @@ def extract_keywords(texts: list, top_n: int = 10) -> list:
     return Counter(words).most_common(top_n)
 
 
+def get_korean_font_path():
+    """한글 폰트 다운로드 및 경로 반환"""
+    font_path = '/tmp/NanumGothic.ttf'
+    
+    if not os.path.exists(font_path):
+        try:
+            # 나눔고딕 폰트 다운로드
+            url = 'https://github.com/naver/nanumfont/releases/download/VER2.5/NanumGothic.ttf'
+            urllib.request.urlretrieve(url, font_path)
+        except:
+            # 백업: 구글 폰트
+            try:
+                url = 'https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf'
+                urllib.request.urlretrieve(url, font_path)
+            except:
+                return None
+    
+    return font_path
+
+
+def generate_wordcloud(texts: list):
+    """워드 클라우드 생성"""
+    # 텍스트 전처리
+    all_words = []
+    for text in texts:
+        if not text:
+            continue
+        text = re.sub(r'http\S+', '', text.lower())
+        text = re.sub(r'[^\w\s가-힣]', ' ', text)
+        tokens = text.split()
+        all_words.extend([t for t in tokens if t not in STOPWORDS and len(t) > 1])
+    
+    if not all_words:
+        return None
+    
+    word_freq = Counter(all_words)
+    
+    # 폰트 경로
+    font_path = get_korean_font_path()
+    
+    if not font_path or not os.path.exists(font_path):
+        return None
+    
+    # 워드 클라우드 생성
+    wc = WordCloud(
+        font_path=font_path,
+        width=800,
+        height=400,
+        background_color='white',
+        colormap='copper',  # 브라운 톤 컬러맵
+        max_words=50,
+        prefer_horizontal=0.7,
+        min_font_size=12,
+        max_font_size=100,
+    )
+    
+    wc.generate_from_frequencies(word_freq)
+    
+    return wc
+
+
 def generate_insight(video_info, pos_pct, neg_pct, factors, keywords) -> str:
     insights = []
     
@@ -692,6 +757,22 @@ def main():
             st.markdown('<div class="section-title">주요 키워드</div>', unsafe_allow_html=True)
             kw_html = ' '.join([f'<span class="keyword-tag"><strong>{kw}</strong> {cnt}</span>' for kw, cnt in keywords[:8]])
             st.markdown(f'<div class="card"><div class="keyword-list">{kw_html}</div></div>', unsafe_allow_html=True)
+            
+            # 워드 클라우드
+            st.markdown('<div class="section-title">워드 클라우드</div>', unsafe_allow_html=True)
+            
+            with st.spinner("워드 클라우드 생성 중..."):
+                wc = generate_wordcloud([c['text'] for c in comments])
+            
+            if wc:
+                fig, ax = plt.subplots(figsize=(10, 5))
+                ax.imshow(wc, interpolation='bilinear')
+                ax.axis('off')
+                plt.tight_layout(pad=0)
+                st.pyplot(fig)
+                plt.close()
+            else:
+                st.info("워드 클라우드를 생성할 수 없습니다.")
             
             # 핵심 요인
             st.markdown('<div class="section-title">핵심 요인 분석</div>', unsafe_allow_html=True)
